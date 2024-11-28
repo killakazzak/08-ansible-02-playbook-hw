@@ -7,18 +7,27 @@
       ansible.builtin.service:
         name: clickhouse
         state: restarted
+
+    - name: Reload firewall
+      ansible.posix.firewalld:
+        state: reloaded
+
   tasks:
-    - block:
-        - name: Get Clickhouse distribution
+    - name: Get Clickhouse distribution
+      block:
+        - name: Download Clickhouse packages
           ansible.builtin.get_url:
             url: "https://packages.clickhouse.com/rpm/stable/{{ item }}-{{ clickhouse_version }}.noarch.rpm"
             dest: "./{{ item }}-{{ clickhouse_version }}.rpm"
+            mode: "0644"
           with_items: "{{ clickhouse_packages }}"
       rescue:
         - name: Get Clickhouse distribution fallback
           ansible.builtin.get_url:
             url: "https://packages.clickhouse.com/rpm/stable/clickhouse-common-static-{{ clickhouse_version }}.x86_64.rpm"
             dest: "./clickhouse-common-static-{{ clickhouse_version }}.rpm"
+            mode: "0644"
+
     - name: Install Clickhouse packages
       become: true
       ansible.builtin.yum:
@@ -26,10 +35,12 @@
           - clickhouse-common-static-{{ clickhouse_version }}.rpm
           - clickhouse-client-{{ clickhouse_version }}.rpm
           - clickhouse-server-{{ clickhouse_version }}.rpm
-        disable_gpg_check: yes
+        disable_gpg_check: true
       notify: Start Clickhouse service
+
     - name: Flush handlers
-      meta: flush_handlers
+      ansible.builtin.meta: flush_handlers
+
     - name: Ensure Clickhouse service is running
       ansible.builtin.service:
         name: clickhouse-server
@@ -51,20 +62,21 @@
       notify: Restart Clickhouse service
 
     - name: Open TCP port 9000 in the firewall
-      ansible.builtin.command: "firewall-cmd --add-port=9000/tcp --permanent"
+      ansible.posix.firewalld:
+        port: 9000/tcp
+        permanent: true
+        state: enabled
       register: firewall_cmd
-      changed_when: firewall_cmd.rc == 0
-    - name: Open TCP port 8123 in the firewall
-      ansible.builtin.command: "firewall-cmd --add-port=8123/tcp --permanent"
-      register: firewall_cmd
-      changed_when: firewall_cmd.rc == 0
 
-    - name: Reload firewall
-      ansible.builtin.command: "firewall-cmd --reload"
-      when: firewall_cmd.changed
+    - name: Open TCP port 8123 in the firewall
+      ansible.posix.firewalld:
+        port: 8123/tcp
+        permanent: true
+        state: enabled
+      register: firewall_cmd
 
     - name: Create database
-      ansible.builtin.command: "clickhouse-client --host {{ clickhouse_host }} -q 'create database logs;'"
+      ansible.builtin.command: "clickhouse-client --host {{ clickhouse_host }} -q 'create database if not exists logs;'"
       register: create_db
       failed_when: create_db.rc != 0 and create_db.rc != 82
       changed_when: create_db.rc == 0
@@ -108,3 +120,5 @@
 
     - name: Check contents of Vector installation directory
       ansible.builtin.command: ls -l {{ vector_install_dir }}
+      register: vector_dir_contents
+      changed_when: false
