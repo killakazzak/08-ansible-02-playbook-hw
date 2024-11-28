@@ -2,24 +2,24 @@
 - name: Install Clickhouse
   hosts: clickhouse
   handlers:
-    - name: Start clickhouse service
+    - name: Start Clickhouse service
       become: true
       ansible.builtin.service:
         name: clickhouse
         state: restarted
   tasks:
     - block:
-        - name: Get clickhouse distrib
+        - name: Get Clickhouse distribution
           ansible.builtin.get_url:
             url: "https://packages.clickhouse.com/rpm/stable/{{ item }}-{{ clickhouse_version }}.noarch.rpm"
             dest: "./{{ item }}-{{ clickhouse_version }}.rpm"
           with_items: "{{ clickhouse_packages }}"
       rescue:
-        - name: Get clickhouse distrib
+        - name: Get Clickhouse distribution fallback
           ansible.builtin.get_url:
             url: "https://packages.clickhouse.com/rpm/stable/clickhouse-common-static-{{ clickhouse_version }}.x86_64.rpm"
             dest: "./clickhouse-common-static-{{ clickhouse_version }}.rpm"
-    - name: Install clickhouse packages
+    - name: Install Clickhouse packages
       become: true
       ansible.builtin.yum:
         name:
@@ -27,10 +27,10 @@
           - clickhouse-client-{{ clickhouse_version }}.rpm
           - clickhouse-server-{{ clickhouse_version }}.rpm
         disable_gpg_check: yes
-      notify: Start clickhouse service
+      notify: Start Clickhouse service
     - name: Flush handlers
       meta: flush_handlers
-    - name: Ensure clickhouse service is running
+    - name: Ensure Clickhouse service is running
       ansible.builtin.service:
         name: clickhouse-server
         state: started
@@ -48,13 +48,13 @@
         regexp: '^\\s*<listen_host>.*</listen_host>'
         line: "    <listen_host>0.0.0.0</listen_host>"
         state: present
-      notify: Restart clickhouse service
+      notify: Restart Clickhouse service
 
-    - name: Open port tcp:9000 in the firewall
+    - name: Open TCP port 9000 in the firewall
       ansible.builtin.command: "firewall-cmd --add-port=9000/tcp --permanent"
       register: firewall_cmd
       changed_when: firewall_cmd.rc == 0
-    - name: Open port tcp:8123 in the firewall
+    - name: Open TCP port 8123 in the firewall
       ansible.builtin.command: "firewall-cmd --add-port=8123/tcp --permanent"
       register: firewall_cmd
       changed_when: firewall_cmd.rc == 0
@@ -69,71 +69,42 @@
       failed_when: create_db.rc != 0 and create_db.rc != 82
       changed_when: create_db.rc == 0
 
-- name: Установка и настройка Vector
+- name: Install and configure Vector
   hosts: clickhouse
   become: true
   vars:
     vector_install_dir: "/opt/vector"
     vector_config_template: "vector_config.j2"
-    vector_arch: "x86_64" # Укажите нужную архитектуру
+    vector_arch: "x86_64" # Specify the required architecture
 
   tasks:
-    - name: Получение последней версии Vector
+    - name: Get the latest version of Vector
       ansible.builtin.uri:
         url: "https://api.github.com/repos/vectordotdev/vector/releases/latest"
         return_content: true
       register: vector_release
 
-    - name: Установка переменной vector_version
+    - name: Set vector_version variable
       ansible.builtin.set_fact:
         v_version: "{{ vector_release.json.tag_name | replace('v', '') }}"
 
-    - name: Скачивание дистрибутива Vector
+    - name: Download Vector distribution
       ansible.builtin.get_url:
         url: "https://github.com/vectordotdev/vector/releases/download/v{{ v_version }}/vector-{{ v_version }}-{{ vector_arch }}-unknown-linux-gnu.tar.gz"
         dest: "/tmp/vector-{{ v_version }}-{{ vector_arch }}.tar.gz"
         mode: "0644" # Set appropriate permissions
 
-    - name: Создание директории для установки Vector
+    - name: Create directory for Vector installation
       ansible.builtin.file:
         path: "{{ vector_install_dir }}"
         state: directory
         mode: "0755"
 
-    - name: Распаковка дистрибутива Vector
+    - name: Extract Vector distribution
       ansible.builtin.unarchive:
         src: "/tmp/vector-{{ v_version }}-{{ vector_arch }}.tar.gz"
         dest: "{{ vector_install_dir }}"
         remote_src: true
 
-    - name: Проверка содержимого директории установки Vector
+    - name: Check contents of Vector installation directory
       ansible.builtin.command: ls -l {{ vector_install_dir }}
-      register: vector_install_contents
-      changed_when: false
-
-    - name: Debug output of installation contents
-      ansible.builtin.debug:
-        var: vector_install_contents.stdout_lines
-
-    - name: Установка прав на выполнение для бинарного файла Vector
-      ansible.builtin.file:
-        path: "{{ vector_install_dir }}/vector-{{ vector_arch }}-unknown-linux-gnu/bin/vector"
-        mode: "0755"
-
-    - name: Копирование конфигурационного файла Vector
-      ansible.builtin.template:
-        src: "{{ vector_config_template }}"
-        dest: "{{ vector_install_dir }}/vector.toml"
-        mode: "0644" # Set appropriate permissions
-      notify: Restart Vector
-
-    - name: Установка Vector
-      ansible.builtin.command: "{{ vector_install_dir }}/vector-{{ vector_arch }}-unknown-linux-gnu/bin/vector --version"
-      register: vector_install
-      changed_when: false
-
-  handlers:
-    - name: Restart Vector
-      ansible.builtin.systemd:
-        name: vector
-        state: restarted
