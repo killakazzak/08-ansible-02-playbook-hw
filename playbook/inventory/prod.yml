@@ -3,4 +3,3 @@ clickhouse:
   hosts:
     clickhouse-01:
       ansible_host: 37.46.134.147
-      #ansible_connection: docker
