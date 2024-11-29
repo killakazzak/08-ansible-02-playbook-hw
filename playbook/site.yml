@@ -10,7 +10,7 @@
 
     - name: Reload firewall
       ansible.posix.firewalld:
-        state: reloaded
+        state: enabled
 
   tasks:
     - name: Get Clickhouse distribution
