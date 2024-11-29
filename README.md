@@ -83,6 +83,9 @@ PLAY RECAP *********************************************************************
 clickhouse-01              : ok=17   changed=4    unreachable=0    failed=0    skipped=0    rescued=1    ignored=0   
 ```
 5. Запустите `ansible-lint site.yml` и исправьте ошибки, если они есть.
+
+![image](https://github.com/user-attachments/assets/3c3f5ad5-6735-42da-b926-3f9d9fce7022)
+
 6. Попробуйте запустить playbook на этом окружении с флагом `--check`.
 7. Запустите playbook на `prod.yml` окружении с флагом `--diff`. Убедитесь, что изменения на системе произведены.
 8. Повторно запустите playbook с флагом `--diff` и убедитесь, что playbook идемпотентен.
